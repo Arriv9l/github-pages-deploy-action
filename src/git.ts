@@ -6,6 +6,11 @@ import {execute} from './execute'
 import {generateWorktree} from './worktree'
 import {isNullOrUndefined, suppressSensitiveInformation} from './util'
 
+interface Map {
+  folder: string
+  targetFolder?: string
+}
+
 /* Initializes git in the workspace. */
 export async function init(action: ActionInterface): Promise<void | Error> {
   try {
@@ -108,40 +113,57 @@ export async function deploy(action: ActionInterface): Promise<Status> {
       }
     }
 
-    if (action.targetFolder) {
-      info(`Creating target folder if it doesn't already exist… 📌`)
-      await mkdirP(`${temporaryDeploymentDirectory}/${action.targetFolder}`)
+    let folderMap: Map[]
+    if (action.folderMap) {
+      folderMap = JSON.parse(action.folderMap)
+    } else {
+      folderMap = [
+        {
+          folder: action.folder,
+          targetFolder: action.targetFolder
+        }
+      ]
     }
+    info(`folderMap: ${JSON.stringify(folderMap)}`)
 
-    /*
-      Pushes all of the build files into the deployment directory.
-      Allows the user to specify the root if '.' is provided.
-      rsync is used to prevent file duplication. */
-    await execute(
-      `rsync -q -av --checksum --progress ${action.folderPath}/. ${
-        action.targetFolder
-          ? `${temporaryDeploymentDirectory}/${action.targetFolder}`
-          : temporaryDeploymentDirectory
-      } ${
-        action.clean
-          ? `--delete ${excludes} ${
-              !fs.existsSync(`${action.folderPath}/CNAME`)
-                ? '--exclude CNAME'
-                : ''
-            } ${
-              !fs.existsSync(`${action.folderPath}/.nojekyll`)
-                ? '--exclude .nojekyll'
-                : ''
-            }`
-          : ''
-      }  --exclude .ssh --exclude .git --exclude .github ${
-        action.folderPath === action.workspace
-          ? `--exclude ${temporaryDeploymentDirectory}`
-          : ''
-      }`,
-      action.workspace,
-      action.silent
-    )
+    for (const each of folderMap) {
+      if (each.targetFolder) {
+        info(`Creating target folder if it doesn't already exist… 📌`)
+        await mkdirP(`${temporaryDeploymentDirectory}/${each.targetFolder}`)
+      }
+
+      /*
+        Pushes all of the build files into the deployment directory.
+        Allows the user to specify the root if '.' is provided.
+        rsync is used to prevent file duplication. */
+      const folderPath = (action.folderPath || '').replace(
+        action.folder,
+        each.folder
+      )
+      await execute(
+        `rsync -q -av --checksum --progress ${folderPath}/. ${
+          each.targetFolder
+            ? `${temporaryDeploymentDirectory}/${each.targetFolder}`
+            : temporaryDeploymentDirectory
+        } ${
+          action.clean
+            ? `--delete ${excludes} ${
+                !fs.existsSync(`${folderPath}/CNAME`) ? '--exclude CNAME' : ''
+              } ${
+                !fs.existsSync(`${folderPath}/.nojekyll`)
+                  ? '--exclude .nojekyll'
+                  : ''
+              }`
+            : ''
+        }  --exclude .ssh --exclude .git --exclude .github ${
+          folderPath === action.workspace
+            ? `--exclude ${temporaryDeploymentDirectory}`
+            : ''
+        }`,
+        action.workspace,
+        action.silent
+      )
+    }
 
     // Use git status to check if we have something to commit.
     // Special case is singleCommit with existing history, when

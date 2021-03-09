@@ -49,6 +49,8 @@ export interface ActionInterface {
   sshKey?: string | boolean | null
   /** If you'd like to push the contents of the deployment folder into a specific directory on the deployment branch you can specify it here. */
   targetFolder?: string
+  /** Folder and tagetFolder key-value pairs. */
+  folderMap?: string
   /** Deployment token. */
   token?: string | null
   /** The token type, ie ssh/token, this gets automatically generated. */
@@ -79,7 +81,6 @@ export interface NodeActionInterface {
 
 /* Required action data that gets initialized when running within the GitHub Actions environment. */
 export const action: ActionInterface = {
-  folder: getInput('folder'),
   branch: getInput('branch'),
   commitMessage: getInput('commit-message'),
   dryRun: !isNullOrUndefined(getInput('dry-run'))
@@ -131,7 +132,9 @@ export const action: ActionInterface = {
       getInput('ssh-key').toLowerCase() === 'true'
     ? true
     : getInput('ssh-key'),
+  folder: getInput('folder'),
   targetFolder: getInput('target-folder'),
+  folderMap: getInput('folder-map'),
   workspace: process.env.GITHUB_WORKSPACE || ''
 }
 
